@@ -1,3 +1,4 @@
+'use strict'
 
 var _ = require('highland')
 var request = require('superagent')
@@ -27,71 +28,110 @@ function read (filePath) {
     })
 }
 
-function list (filePath, cb) {
-  // body...
+function listFile (nodePath) {
+  return request.get(host + '/api/v0/file/ls?arg=' + nodePath)
+    .highland()
+    .pluck('text')
 }
 
-function streamOrCallback (stream, cb) {
-  if (cb) {
-    return stream.toCallback(cb)
-  } else {
-    return stream
-  }
+function getFileHash () {
+  return request.get(host + '/api/v0/files/stat?hash&arg=/')
+    .highland()
+    .pluck('text')
 }
+
+exports.flushAndPublish = function () {
+  return getFileHash()
+    .flatMap(function (hash) {
+      return request(host + '/api/v0/name/publish?arg=' + hash)
+        .highland()
+    })
+}
+
+exports.getId = function () {
+  return request(host + '/api/v0/id')
+    .highland()
+    .map(function (res) {
+      return res.body.ID
+    })
+}
+
+// function streamOrCallback (stream, cb) {
+//   if (cb) {
+//     return stream.toCallback(cb)
+//   } else {
+//     return stream
+//   }
+// }
 
 /**
  * Sets the host.
  *
  * @param      {String}  host    The host ipfs node
  */
-exports.setHost = function (host) {
-  host = host
+exports.setHost = function (newHost) {
+  host = newHost
 }
 
 /**
- * Sets the profile for this node.
+ * Sets the username for this node.
  *
- * @param      {Object}    profile  The profile data
+ * @param      {String}    username The username
  * @param      {Function}  cb       Callback
  */
-exports.setProfile = function (profile, cb) {
-  // TODO validate
-  return streamOrCallback(write('/profile.json', profile), cb)
+exports.setUsername = function (username, cb) {
+  return writeJsonFile('/username', username)
 }
 
 /**
- * Gets the profile of this node.
+ * Sets the bio for this node.
  *
- * @param      {Function}  cb      Callback
+ * @param      {String}    bio      The bio
+ * @param      {Function}  cb       Callback
  */
-exports.getProfile = function (cb) {
-  return streamOrCallback(read('/profile.json'), cb)
+exports.setBio = function (bio, cb) {
+  return writeJsonFile('/bio', bio)
 }
 
-exports.post = function (data, cb) {
+exports.post = function (data) {
   var date = new Date()
   console.log('/posts/' + date.getUTCFullYear() + '/' + date.getUTCMonth() + '/' + date.getTime())
-  return streamOrCallback(write('/posts/' + date.getUTCFullYear() + '/' + date.getUTCMonth() + '/' + date.getTime(), data), cb)
+  return writeJsonFile('/posts/' + date.getUTCFullYear() + '/' + date.getUTCMonth() + '/' + date.getTime(), data)
 }
 
 /**
  * Gets recent posts by you and your followees
  */
-exports.getRecentPosts = function () {
+exports.getFeed = function () {
   var date = new Date()
-  var currMonth = date.getUTCMonth()
+  // get last two months
+  // months are zero index so add one
+  var currYearMonth = date.getUTCFullYear() + '/' + (date.getUTCMonth() + 1)
+  // this will handling rolling back to prev years
   date.setUTCMonth(date.getUTCMonth() - 1)
-  var prevMonth = date.getUTCMonth()
+  var prevYearMonth = date.getUTCFullYear() + '/' + (date.getUTCMonth() + 1)
 
-  read('/followees.json')
+  readJsonFile('/followees.json')
   .flatMap(function (followees) {
     return _(followees)
   }).flatMap(function (followee) {
-    return _([prevMonth, currMonth])
-    .map(function (month) {
-      return request(host + '/ipfs/' + followee + '/posts/' + date.getUTCFullYear() + '/' + month + '.json')
-        .then()
+    return _([prevYearMonth, currYearMonth])
+    .map(function (yearMonth) {
+      return listFile('/ipns/' + followee + '/posts/' + yearMonth)
+        .split()
+        .map(function (postId) {
+          return '/ipns/' + followee + '/posts/' + yearMonth + '/' + postId
+        })
     })
   }).parallel(4)
 }
 
+exports.addFollowee = function (followeeId) {
+  return readJsonFile('/followees.json')
+  .map(function (followees) {
+    followees.push(followeeId)
+    return followees
+  }).flatMap(function (followees) {
+    return writeJsonFile('/followees.json', followees)
+  })
+}
