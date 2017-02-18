@@ -13,10 +13,11 @@ Data structure
 
 Features
 
-- access local node
+- set profile
 - view profile
-- update profile
-- view recent posts (your own and followees')
-- create posts
+- follow other
+- view other profile
+- make post
+- view followees posts
 
 

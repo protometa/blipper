@@ -1,13 +1,27 @@
+/* eslint-env mocha */
 
-var _ = require('highland')
-var request = require('superagent')
+// var _ = require('highland')
+// var request = require('superagent')
+require('should')
 
 var blipperClient = require('./index.js')
-
-blipperClient.post('well this is neat')
-.each(function (res) {
-  console.log(res)
+describe('blipperClient', function () {
+  describe('getId', function () {
+    it('should return ipfs id', function (done) {
+      blipperClient.getId()
+      .map(function (id) {
+        // console.log(id)
+        id.should.match(/(\w+).*/)
+      })
+      .toCallback(done)
+    })
+  })
 })
+
+// blipperClient.post('well this is neat')
+// .each(function (res) {
+//   console.log(res)
+// })
 
 // request.highland = function () {
 //   return _.wrapCallback(this.end)()
