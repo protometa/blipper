@@ -6,29 +6,13 @@ var logger = require('superagent-logger')
 
 var host = 'localhost:5001'
 
-// extend superagent to spit out a highland stream
-// (not a real stream of the body since that doesn't work on the browser,
-// also lets us check the res.status)
-request.Request.prototype.highland = function () {
-  return _.wrapCallback(this.end.bind(this))()
-}
-
-// function throwOnErrorStatus (res) {
-//   console.log(res.request.url, res.status)
-//   if (res.error) {
-//     throw new Error('HTTP error status '+res.status+' from '+res.request.url+': '+res.text)
-//   } else {
-//     return res
-//   }
-// }
-
 function write (filePath, data) {
   var dir = path.dirname(filePath)
-  return request.get(host+'/api/v0/files/mkdir?p&arg=/blipper'+dir)
+  return request.get(host + '/api/v0/files/mkdir?p&arg=/blipper' + dir)
     .use(logger)
     .highland()
     .flatMap(function () {
-      return request.post(host+'/api/v0/files/write?arg=/blipper'+filePath+'&create')
+      return request.post(host + '/api/v0/files/write?arg=/blipper' + filePath + '&create')
         .attach('data', new Buffer(JSON.stringify(data)))
         .use(logger)
         .highland()
@@ -36,7 +20,7 @@ function write (filePath, data) {
 }
 
 function read (filePath) {
-  return _(request.get(host+'/api/v0/files/read?arg=/blipper'+filePath)
+  return _(request.get(host + '/api/v0/files/read?arg=/blipper' + filePath)
     .then(throwOnErrorStatus))
     .map(function (res) {
       return JSON.parse(res.text)
@@ -86,8 +70,8 @@ exports.getProfile = function (cb) {
 
 exports.post = function (data, cb) {
   var date = new Date()
-  console.log('/posts/'+date.getUTCFullYear()+'/'+date.getUTCMonth()+'/'+date.getTime())
-  return streamOrCallback(write('/posts/'+date.getUTCFullYear()+'/'+date.getUTCMonth()+'/'+date.getTime(), data), cb)
+  console.log('/posts/' + date.getUTCFullYear() + '/' + date.getUTCMonth() + '/' + date.getTime())
+  return streamOrCallback(write('/posts/' + date.getUTCFullYear() + '/' + date.getUTCMonth() + '/' + date.getTime(), data), cb)
 }
 
 /**
@@ -105,13 +89,9 @@ exports.getRecentPosts = function () {
   }).flatMap(function (followee) {
     return _([prevMonth, currMonth])
     .map(function (month) {
-      return request(host+'/ipfs/'+followee+'/posts/'+date.getUTCFullYear()+'/'+month+'.json')
+      return request(host + '/ipfs/' + followee + '/posts/' + date.getUTCFullYear() + '/' + month + '.json')
         .then()
     })
   }).parallel(4)
-
-
 }
-
-
 
