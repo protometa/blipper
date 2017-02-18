@@ -6,26 +6,19 @@ var path = require('path')
 var logger = require('superagent-logger')
 
 var host = 'localhost:5001'
+var namespace = 'blipper'
 
-function write (filePath, data) {
-  var dir = path.dirname(filePath)
-  return request.get(host + '/api/v0/files/mkdir?p&arg=/blipper' + dir)
-    .use(logger)
-    .highland()
+function writeFile (filePath, data) {
+  return _(request.get(host + '/api/v0/files/mkdir?p&arg=/' + namespace + path.dirname(filePath)))
     .flatMap(function () {
-      return request.post(host + '/api/v0/files/write?arg=/blipper' + filePath + '&create')
-        .attach('data', new Buffer(JSON.stringify(data)))
-        .use(logger)
-        .highland()
+      return _(request.post(host + '/api/v0/files/write?arg=/' + namespace + filePath + '&create')
+        .attach('data', new Buffer(data)))
     })
 }
 
-function read (filePath) {
-  return _(request.get(host + '/api/v0/files/read?arg=/blipper' + filePath)
-    .then(throwOnErrorStatus))
-    .map(function (res) {
-      return JSON.parse(res.text)
-    })
+function readFile (filePath) {
+  return _(request.get(host + '/api/v0/files/read?arg=/blipper' + filePath))
+    .pluck('text')
 }
 
 function listFile (nodePath) {
