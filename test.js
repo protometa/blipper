@@ -5,6 +5,7 @@
 require('should')
 
 var blipperClient = require('./index.js')
+
 describe('blipperClient', function () {
   describe('getId', function () {
     it('should return ipfs id', function (done) {

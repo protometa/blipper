@@ -3,7 +3,6 @@
 var _ = require('highland')
 var request = require('superagent')
 var path = require('path')
-var logger = require('superagent-logger')
 
 var host = 'localhost:5001'
 var namespace = 'blipper'
@@ -17,24 +16,32 @@ function writeFile (filePath, data) {
 }
 
 function readFile (filePath) {
-  return _(request.get(host + '/api/v0/files/read?arg=/blipper' + filePath))
+  return _(request.get(host + '/api/v0/files/read?arg=/' + namespace + filePath))
     .pluck('text')
 }
 
-function listFile (nodePath) {
-  return request.get(host + '/api/v0/file/ls?arg=' + nodePath)
-    .highland()
+function listFiles (filePath) {
+  return _(request.get(host + '/api/v0/file/ls?arg=/' + namespace + filePath))
     .pluck('text')
 }
 
-function getFileHash () {
-  return request.get(host + '/api/v0/files/stat?hash&arg=/')
-    .highland()
+function getRootHash () {
+  return _(request.get(host + '/api/v0/files/stat?hash&arg=/'))
     .pluck('text')
+}
+
+function cleanupRecent () {
+  return listFiles('/post/recent/')
+    .split()
+    // .sort() // necessary?
+    .slice(50) // skip first 50
+    .each(function (file) {
+      removeFile(file)
+    })
 }
 
 exports.flushAndPublish = function () {
-  return getFileHash()
+  return getRootHash()
     .flatMap(function (hash) {
       return request(host + '/api/v0/name/publish?arg=' + hash)
         .highland()
@@ -73,7 +80,7 @@ exports.setHost = function (newHost) {
  * @param      {Function}  cb       Callback
  */
 exports.setUsername = function (username, cb) {
-  return writeJsonFile('/username', username)
+  return writeFile('/username', username)
 }
 
 /**
@@ -83,48 +90,52 @@ exports.setUsername = function (username, cb) {
  * @param      {Function}  cb       Callback
  */
 exports.setBio = function (bio, cb) {
-  return writeJsonFile('/bio', bio)
+  return writeFile('/bio', bio)
 }
 
 exports.post = function (data) {
   var date = new Date()
-  console.log('/posts/' + date.getUTCFullYear() + '/' + date.getUTCMonth() + '/' + date.getTime())
-  return writeJsonFile('/posts/' + date.getUTCFullYear() + '/' + date.getUTCMonth() + '/' + date.getTime(), data)
+  // console.log('/posts/archive' + date.getUTCFullYear() + '/' + (date.getUTCMonth() + 1) + '/' + date.getTime())
+  return _([
+    writeFile('/posts/recent/' + date.getTime(), data),
+    writeFile('/posts/archive/' + date.getUTCFullYear() + '/' + (date.getUTCMonth() + 1) + '/' + date.getTime(), data) // should be copied? non blocking
+  ]).sequence()
+  .doto(cleanupRecent) // should be done with observe to not block
 }
 
 /**
  * Gets recent posts by you and your followees
  */
 exports.getFeed = function () {
-  var date = new Date()
-  // get last two months
-  // months are zero index so add one
-  var currYearMonth = date.getUTCFullYear() + '/' + (date.getUTCMonth() + 1)
-  // this will handling rolling back to prev years
-  date.setUTCMonth(date.getUTCMonth() - 1)
-  var prevYearMonth = date.getUTCFullYear() + '/' + (date.getUTCMonth() + 1)
-
-  readJsonFile('/followees.json')
-  .flatMap(function (followees) {
-    return _(followees)
-  }).flatMap(function (followee) {
-    return _([prevYearMonth, currYearMonth])
-    .map(function (yearMonth) {
-      return listFile('/ipns/' + followee + '/posts/' + yearMonth)
-        .split()
-        .map(function (postId) {
-          return '/ipns/' + followee + '/posts/' + yearMonth + '/' + postId
-        })
-    })
-  }).parallel(4)
+  readFile('/followees')
+  .split()
+  .map(function (id) {
+    return get('/ipns/' + id + '/' + namespace + '/username')
+      .map(function (username) {
+        return {id: id, username: username}
+      })
+  })
+  .parallel(4) // resolve usernames
+  .map(function (followee) {
+    return list('/ipns/' + followee.id + '/' + namespace + '/posts/recent/') // different file list
+      .split()
+      .map(function (time) {
+        return Object.assign({time: time}, followee)
+      })
+      .map(function (post) {
+        return get('/ipns/' + post.id + '/' + namespace + '/posts/recent/' + post.time)
+          .map(function (content) {
+            return Object.assign({content: content}, post)
+          })
+      })
+  }).parallel(4) // resolve recent posts
+  .sortBy(function (postA, postB) {
+    return parseInt(postA.time) - parseInt(postB.time)
+  })
+  .parallel(4) // resolve posts contente
 }
 
 exports.addFollowee = function (followeeId) {
-  return readJsonFile('/followees.json')
-  .map(function (followees) {
-    followees.push(followeeId)
-    return followees
-  }).flatMap(function (followees) {
-    return writeJsonFile('/followees.json', followees)
-  })
+  return appendFile('/followees', followeeId)
+  // get info to jumpstart ipns
 }
