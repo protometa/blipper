@@ -1,0 +1,23 @@
+version: '3'
+
+services:
+
+  dev:
+    image: node:6
+    volumes:
+      - $PWD:/usr/src/app
+    working_dir:
+      /usr/src/app
+    links:
+      - ipfs-node-1
+      - ipfs-node-2
+      - ipfs-node-3
+
+  ipfs-node-1:
+    image: ipfs/go-ipfs
+
+  ipfs-node-2:
+    image: ipfs/go-ipfs
+
+  ipfs-node-3:
+    image: ipfs/go-ipfs
