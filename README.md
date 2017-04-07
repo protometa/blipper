@@ -1,32 +1,21 @@
 
 Javascript client for a distributed social network over the Interplanetary Filesystem (IPFS)
 
-Data structure
+# Usage
 
-- blipper/
-    + profile
-    + posts/
-        * [year]/
-            - [month]
-    + followees
+    npm install blipper
 
-
-Features
-
-- set profile
-- view profile
-- follow other
-- view other profile
-- make post
-- view followees posts
-
-# Install IPFS
-
-A connection to an IPFS node is required. Install and run IPFS localy.
+    var Blipper = require('blipper')
+    var client1 = new Blipper({
+      node: 'ipfs-node:5001',
+      gateway: 'ipfs-node:8080'
+    })
 
 # CLI
 
-The CLI requires a connection to an IPFS node. Install and run the IPFS deamon and it will connect on the default port.
+    npm install --global blipper
+
+To use the CLI (Install and run IPFS)[https://ipfs.io/docs/install/] locally. Blipper will connect with the node over the default ports.
 
 Set your username (Doesn't have to be unique)
 
@@ -44,18 +33,11 @@ Say something
 
     blipper say "Hey planet!"
 
-Post a file
-
-    blipper post /path/to/file
-
 Add friends' IDs to follow
 
     blipper add QmUNfYBRgXqV1NDDiTws9vvFWtijZwMZCu6KENEVWGcG7k
 
 Show feed of posts by people you follow
 
-    blipper [feed]
+    blipper feed
 
-Show someone else's feed
-
-    blipper feed <friends name>
