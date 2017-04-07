@@ -2,9 +2,10 @@
 
 var _ = require('highland')
 var request = require('superagent')
-var path = require('path')
+var p = require('path')
 
-function BlipperClient (opts) {
+function Blipper (opts) {
+  var opts = opts || {}
   this.node = opts.node || 'localhost:5001'
   this.gateway = opts.gateway || 'localhost:8080'
   this.namespace = opts.blipper || 'blipper'
@@ -25,54 +26,62 @@ function post (path, data) {
   .then())
 }
 
-BlipperClient.prototype.writeFile = function (filePath, data) {
+Blipper.prototype.writeFile = function (path, data) {
   var that = this
-  return get(this.node + '/api/v0/files/mkdir?p&arg=/' + this.namespace + path.dirname(filePath))
+  return get(this.node + '/api/v0/files/mkdir?p&arg=/' + this.namespace + p.dirname(path))
   .flatMap(function () {
-    return post(that.node + '/api/v0/files/write?create&truncate&arg=/' + that.namespace + filePath, data)
+    return post(that.node + '/api/v0/files/write?create&truncate&arg=/' + that.namespace + path, data)
   })
 }
 
-BlipperClient.prototype.readFile = function (filePath) {
-  return get(this.node + '/api/v0/files/read?arg=/' + this.namespace + filePath)
+Blipper.prototype.readFile = function (path) {
+  return get(this.node + '/api/v0/files/read?arg=/' + this.namespace + path)
+  .errors(function (err, push) {
+    if (!(err.response && err.response.body.Message === 'file does not exist')) throw err
+  })
   // .compact()
 }
 
-BlipperClient.prototype.removeFile = function (filePath) {
-  return get(this.node + '/api/v0/files/rm?recursive&arg=/' + this.namespace + filePath)
+Blipper.prototype.removeFile = function (path) {
+  return get(this.node + this.prefix + '/files/rm?recursive&arg=/' + this.namespace + path)
   // ignore not exists errors
   .errors(function (err) {
     if (!(err.response && /file does not exist/.test(err.response.body.Message))) throw err
   })
 }
 
-BlipperClient.prototype.listFiles = function (filePath) {
-  return get(this.node + '/api/v0/file/ls?arg=/' + this.namespace + filePath)
+Blipper.prototype.listFiles = function (path) {
+  return getJSON(this.node + this.prefix + '/files/ls?arg=/' + this.namespace + path)
 }
 
-BlipperClient.prototype.getRootHash = function () {
+Blipper.prototype.getRootHash = function () {
   return getJSON(this.node + '/api/v0/files/stat?arg=/').pluck('Hash')
 }
 
-BlipperClient.prototype.get = function (path) {
+Blipper.prototype.get = function (path) {
   return get(this.gateway + path)
 }
 
-BlipperClient.prototype.list = function (path) {
+Blipper.prototype.list = function (path) {
   return getJSON(this.node + this.prefix + '/ls?arg=' + path)
 }
 
-BlipperClient.prototype.cleanupRecent = function () {
-  return this.listFiles('/post/recent/')
-    .split()
-    // .sort() // necessary?
-    .slice(50) // skip first 50
-    .each(function (file) {
-      this.removeFile(file)
-    })
+Blipper.prototype.cleanupRecent = function () {
+  return this.listFiles('/posts/recent/')
+  .errors(err => console.dir(err))
+  .flatMap(res => _(res.Entries))
+  // .filter(post => Date.now() - parseInt(post.Name) > 86400000) // post is older than 24 hrs
+  .sortBy(function (postA, postB) {
+    return parseInt(postA.Name) - parseInt(postB.Name)
+  })
+  .slice(30) // skip first n
+  .map(function (post) {
+    this.removeFile('/posts/recent/' + post.Name)
+  })
+  .collect()
 }
 
-BlipperClient.prototype.flushAndPublish = function () {
+Blipper.prototype.flushAndPublish = function () {
   var that = this
   return this.getRootHash()
   .flatMap(function (hash) {
@@ -81,19 +90,37 @@ BlipperClient.prototype.flushAndPublish = function () {
   })
 }
 
-BlipperClient.prototype.getId = function () {
+Blipper.prototype.getId = function () {
   return getJSON(this.node + this.prefix + '/id').pluck('ID')
 }
 
-BlipperClient.prototype.setUsername = function (username, cb) {
+Blipper.prototype.setUsername = function (username) {
   return this.writeFile('/username', username)
+  .map(function (res) {
+    return username
+  })
 }
 
-BlipperClient.prototype.setBio = function (bio, cb) {
-  return this.writeFile('/bio', bio)
+Blipper.prototype.setAbout = function (about) {
+  console.log(about)
+  return this.writeFile('/about', about)
+  .map(function (res) {
+    return about
+  })
 }
 
-BlipperClient.prototype.post = function (data) {
+Blipper.prototype.getProfile = function () {
+  return _([this.readFile('/username').otherwise([null]), this.readFile('/about').otherwise([null]), this.getId()]).zipAll0()
+  .map(function (results) {
+    return {
+      username: results[0],
+      about: results[1],
+      id: results[2]
+    }
+  })
+}
+
+Blipper.prototype.post = function (data) {
   var that = this
   var date = new Date()
   // console.log('/posts/archive' + date.getUTCFullYear() + '/' + (date.getUTCMonth() + 1) + '/' + date.getTime())
@@ -104,15 +131,17 @@ BlipperClient.prototype.post = function (data) {
   .sequence()
   .collect()
   .flatMap(function () {
+    return that.cleanupRecent()
+  })
+  .flatMap(function () {
     return that.flushAndPublish()
   })
   .map(function () {
     return date.getTime()
   })
-  // .doto(cleanupRecent) // should be done with observe to not block
 }
 
-BlipperClient.prototype.getFeed = function () {
+Blipper.prototype.getFeed = function () {
   var that = this
   return this.readFile('/followees')
   .split()
@@ -159,16 +188,9 @@ BlipperClient.prototype.getFeed = function () {
   // .tap(_.log)
 }
 
-BlipperClient.prototype.addFollowee = function (followeeId) {
+Blipper.prototype.addFollowee = function (followeeId) {
   var that = this
   return this.readFile('/followees')
-  // ignore not exists errors
-  .errors(function (err) {
-    if (err.response && err.response.body.Message !== 'file does not exist') throw err
-  })
-  .errors(function (err) {
-    if (!(err.response && /file does not exist/.test(err.response.body.Message))) throw err
-  })
   .split()
   .append(followeeId)
   .uniq()
@@ -178,4 +200,4 @@ BlipperClient.prototype.addFollowee = function (followeeId) {
   })
 }
 
-module.exports = BlipperClient
+module.exports = Blipper

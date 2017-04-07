@@ -1,8 +1,11 @@
 {
   "name": "blipper",
-  "version": "1.0.0",
+  "version": "0.0.0",
   "description": "",
   "main": "index.js",
+  "bin": {
+    "blipper": "./cli.js"
+  },
   "scripts": {
     "test": "mocha",
     "debug": "mocha debug -r longjohn",
@@ -17,9 +20,7 @@
     "should": "^11.1.2"
   },
   "dependencies": {
-    "es6-promise": "^4.0.5",
     "highland": "^2.10.2",
-    "isomorphic-fetch": "^2.2.1",
     "superagent": "^3.0.0"
   }
 }

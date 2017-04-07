@@ -11,7 +11,7 @@ services:
     links:
       - ipfs-node-1
       - ipfs-node-2
-      - ipfs-node-3
+      # - ipfs-node-3
 
   ipfs-node-1:
     image: ipfs/go-ipfs

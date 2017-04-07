@@ -6,13 +6,13 @@ var _ = require('highland')
 var request = require('superagent')
 var should = require('should')
 
-var BlipperClient = require('./index.js')
-var client1 = new BlipperClient({
+var Blipper = require('./index.js')
+var client1 = new Blipper({
   node: 'ipfs-node-1:5001',
   gateway: 'ipfs-node-1:8080'
 })
 
-var client2 = new BlipperClient({
+var client2 = new Blipper({
   node: 'ipfs-node-2:5001',
   gateway: 'ipfs-node-2:8080'
 })
@@ -72,7 +72,6 @@ describe('blipperClient', function () {
     it('sets username', function (done) {
       client1.setUsername('Client 1')
       .flatMap(function (res) {
-        res.status.should.eql(200)
         return client1.readFile('/username')
       })
       .map(function (name) {
@@ -96,11 +95,11 @@ describe('blipperClient', function () {
         return client1.getId()
       })
       .flatMap(function (id) {
-        console.log(id)
+        // console.log(id)
         console.log('adding followee')
         return client2.addFollowee(id)
       }).flatMap(function (res) {
-        console.log(res.status)
+        // console.log(res.status)
         console.log('making post')
         return client1.post('hey planet')
       }).flatMap(function (res) {
@@ -112,7 +111,6 @@ describe('blipperClient', function () {
         should.exist(post.time)
         should.exist(post.hash)
         should.exist(post.author.id)
-        // should.exist(post.author.username)
         post.author.username.should.eql('Client 1')
       })
       .done(done)
