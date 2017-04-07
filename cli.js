@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-var Blipper = require('../index.js')
+var Blipper = require('./index.js')
 var _ = require('highland')
 
 var client = new Blipper()
