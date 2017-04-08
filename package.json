@@ -21,6 +21,7 @@
   },
   "dependencies": {
     "highland": "^2.10.2",
-    "superagent": "^3.0.0"
+    "superagent": "^3.0.0",
+    "yargs": "^7.0.2"
   }
 }
