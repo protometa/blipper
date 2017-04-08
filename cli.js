@@ -21,7 +21,7 @@ var commands = {
   add: client.addFollowee,
   feed: function () {
     return client.getFeed().map(function (post) {
-      return post.author.username || post.author.id + ' - ' + (new Date(post.time)).toString() + '\n' +
+      return (post.author.username || post.author.id) + ' - ' + (new Date(post.time)).toString() + '\n' +
       '  ' + post.content + '\n'
     })
   },
